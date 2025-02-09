@@ -23,3 +23,5 @@ go.work.sum
 
 # env file
 .env
+src/.DS_Store
+.DS_Store

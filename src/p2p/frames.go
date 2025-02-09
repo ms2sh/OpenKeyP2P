@@ -31,8 +31,6 @@ func (f *_Frame) GetBodyBytes() []byte {
 // splitIntoFrames splits the given data into multiple frames.
 // Each frame has a maximum size of frameSize bytes and is associated with processId.
 func splitIntoFrames(data []byte, frameSize uint32, processId uint32) []*_Frame {
-	const headerSize = 21 // 21 Bytes (4+4+4+8+1)
-
 	// Ensure that the frame size is larger than the header size
 	if frameSize <= headerSize {
 		// Frame size must be larger than the header,

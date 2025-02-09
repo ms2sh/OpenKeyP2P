@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 
+	"github.com/ms2sh/OpenKeyP2P/src/logging"
 	"github.com/ms2sh/OpenKeyP2P/src/p2p"
 )
 
@@ -24,9 +25,13 @@ func main() {
 		log.Printf("Failed to accept connection: %v", err)
 	}
 
-	upgrconn := p2p.UpgradeConn(conn)
+	upgradedConn, err := p2p.UpgradeConn(conn, p2p.Server, []string{"1.0"})
+	if err != nil {
+		logging.LogError("Fehler beim Upgrade der Verbindung: %v", err)
+		return
+	}
 
-	data, err := upgrconn.Read()
+	data, err := upgradedConn.Read()
 	if err != nil {
 		panic(err)
 	}
