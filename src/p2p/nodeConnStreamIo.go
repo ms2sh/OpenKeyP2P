@@ -8,11 +8,11 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
-func _streamAcceptOppositeStream(conn quic.Connection, context context.Context, cancel context.CancelCauseFunc, inStream chan *_ChanStreamErrorResult) {
+func _streamAcceptOppositeSide(conn quic.Connection, context context.Context, cancel context.CancelCauseFunc, inStream chan *_ChanStreamErrorResult) {
 	// Warte auf einen Stream (blockiert, bis ein Stream geöffnet wird oder die Verbindung geschlossen wird)
 	stream, err := conn.AcceptStream(context)
 	if err != nil {
-		cancel(fmt.Errorf("_streamAcceptOppositeStream: %s", err.Error()))
+		cancel(fmt.Errorf("_streamAcceptOppositeSide: %s", err.Error()))
 		close(inStream)
 		return
 	}
@@ -25,7 +25,7 @@ func initControlStreams(nodeConn *NodeP2PConnection) error {
 	inStreamChan := make(chan *_ChanStreamErrorResult, 1)
 
 	// Startet die Routine welche den Control Stream der Gegenseite Akzeptiert
-	go _streamAcceptOppositeStream(nodeConn.conn, nodeConn.context, nodeConn.contextCancel, inStreamChan)
+	go _streamAcceptOppositeSide(nodeConn.conn, nodeConn.context, nodeConn.contextCancel, inStreamChan)
 
 	// Es wird ein Control Stream mit der gegenseite aufgebaut
 	outStream, err := nodeConn.conn.OpenStreamSync(nodeConn.context)
@@ -59,7 +59,7 @@ func initRoutingStreams(nodeConn *NodeP2PConnection) error {
 	inStreamChan := make(chan *_ChanStreamErrorResult, 1)
 
 	// Startet die Routine welche den Control Stream der Gegenseite Akzeptiert
-	go _streamAcceptOppositeStream(nodeConn.conn, nodeConn.context, nodeConn.contextCancel, inStreamChan)
+	go _streamAcceptOppositeSide(nodeConn.conn, nodeConn.context, nodeConn.contextCancel, inStreamChan)
 
 	// Es wird ein Control Stream mit der gegenseite aufgebaut
 	outStream, err := nodeConn.conn.OpenStreamSync(nodeConn.context)
@@ -93,7 +93,7 @@ func initPackageTrafficStreams(nodeConn *NodeP2PConnection) error {
 	inStreamChan := make(chan *_ChanStreamErrorResult, 1)
 
 	// Startet die Routine welche den Control Stream der Gegenseite Akzeptiert
-	go _streamAcceptOppositeStream(nodeConn.conn, nodeConn.context, nodeConn.contextCancel, inStreamChan)
+	go _streamAcceptOppositeSide(nodeConn.conn, nodeConn.context, nodeConn.contextCancel, inStreamChan)
 
 	// Es wird ein Control Stream mit der gegenseite aufgebaut
 	outStream, err := nodeConn.conn.OpenStreamSync(nodeConn.context)
