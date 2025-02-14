@@ -25,3 +25,13 @@ go.work.sum
 .env
 src/.DS_Store
 .DS_Store
+src/hsi/types.go
+src/docker/detection.go
+src/crypto/types.go
+src/core/types.go
+src/cli/types.go
+src/docker/types.go
+src/tor/types.go
+test/client/client
+test/server/server
+src/core/packages.txt
