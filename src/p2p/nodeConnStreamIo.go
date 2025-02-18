@@ -20,114 +20,117 @@ func _streamAcceptOppositeSide(conn quic.Connection, context context.Context, ca
 	inStream <- &_ChanStreamErrorResult{err: nil, stream: stream}
 }
 
-func initControlStreams(nodeConn *NodeP2PConnection) error {
+func initControlStreams(conn quic.Connection, context context.Context, contextCancel context.CancelCauseFunc) (*_NodeP2PConnectionControlStream, error) {
 	// Der Chan nimmt den Eingehenden Stream entgegen
 	inStreamChan := make(chan *_ChanStreamErrorResult, 1)
 
 	// Startet die Routine welche den Control Stream der Gegenseite Akzeptiert
-	go _streamAcceptOppositeSide(nodeConn.conn, nodeConn.context, nodeConn.contextCancel, inStreamChan)
+	go _streamAcceptOppositeSide(conn, context, contextCancel, inStreamChan)
 
 	// Es wird ein Control Stream mit der gegenseite aufgebaut
-	outStream, err := nodeConn.conn.OpenStreamSync(nodeConn.context)
+	outStream, err := conn.OpenStreamSync(context)
 	if err != nil {
-		return fmt.Errorf("initControlStreams: Fehler beim Öffnen des Control Streams: %w", err)
+		return nil, fmt.Errorf("initControlStreams: Fehler beim Öffnen des Control Streams: %w", err)
 	}
 
 	// Es wird geprüpft ob der Eingehende Stream geöffnet wurde
 	inStreamResult := <-inStreamChan
 	if inStreamResult == nil {
-		return fmt.Errorf("initControlStreams: connection error")
+		return nil, fmt.Errorf("initControlStreams: connection error")
 	}
 	if inStreamResult.err != nil {
-		return fmt.Errorf("initControlStreams: " + inStreamResult.err.Error())
+		return nil, fmt.Errorf("initControlStreams: " + inStreamResult.err.Error())
 	}
 
 	// Die Streams werden abgespeichert
-	cstream := &NodeP2PConnectionControlStream{
+	cstream := &_NodeP2PConnectionControlStream{
 		outControlStream: outStream,
 		inControlStream:  inStreamResult.stream,
 	}
 
-	// Das Stream Objekt wird im Verbindungsobjekt zwischengespeichert
-	nodeConn.controlStream = cstream
-
-	return nil
+	return cstream, nil
 }
 
-func initRoutingStreams(nodeConn *NodeP2PConnection) error {
+func initRoutingStreams(conn quic.Connection, context context.Context, cancel context.CancelCauseFunc) (*_NodeP2PConnectionRoutingStream, error) {
 	// Der Chan nimmt den Eingehenden Stream entgegen
 	inStreamChan := make(chan *_ChanStreamErrorResult, 1)
 
 	// Startet die Routine welche den Control Stream der Gegenseite Akzeptiert
-	go _streamAcceptOppositeSide(nodeConn.conn, nodeConn.context, nodeConn.contextCancel, inStreamChan)
+	go _streamAcceptOppositeSide(conn, context, cancel, inStreamChan)
 
 	// Es wird ein Control Stream mit der gegenseite aufgebaut
-	outStream, err := nodeConn.conn.OpenStreamSync(nodeConn.context)
+	outStream, err := conn.OpenStreamSync(context)
 	if err != nil {
-		return fmt.Errorf("initControlStreams: Fehler beim Öffnen des Control Streams: %w", err)
+		return nil, fmt.Errorf("initControlStreams: Fehler beim Öffnen des Control Streams: %w", err)
 	}
 
 	// Es wird geprüpft ob der Eingehende Stream geöffnet wurde
 	inStreamResult := <-inStreamChan
 	if inStreamResult == nil {
-		return fmt.Errorf("initControlStreams: connection error")
+		return nil, fmt.Errorf("initControlStreams: connection error")
 	}
 	if inStreamResult.err != nil {
-		return fmt.Errorf("initControlStreams: " + inStreamResult.err.Error())
+		return nil, fmt.Errorf("initControlStreams: " + inStreamResult.err.Error())
 	}
 
 	// Die Streams werden abgespeichert
-	cstream := &NodeP2PConnectionControlStream{
-		outControlStream: outStream,
-		inControlStream:  inStreamResult.stream,
+	rstream := &_NodeP2PConnectionRoutingStream{
+		inRoutingStream:  outStream,
+		outRoutingStream: inStreamResult.stream,
 	}
 
-	// Das Stream Objekt wird im Verbindungsobjekt zwischengespeichert
-	nodeConn.controlStream = cstream
-
-	return nil
+	return rstream, nil
 }
 
-func initPackageTrafficStreams(nodeConn *NodeP2PConnection) error {
+func initPackageTrafficStreams(conn quic.Connection, context context.Context, contextCancel context.CancelCauseFunc) (*_NodeP2PConnectionPackageTrafficStream, error) {
 	// Der Chan nimmt den Eingehenden Stream entgegen
 	inStreamChan := make(chan *_ChanStreamErrorResult, 1)
 
 	// Startet die Routine welche den Control Stream der Gegenseite Akzeptiert
-	go _streamAcceptOppositeSide(nodeConn.conn, nodeConn.context, nodeConn.contextCancel, inStreamChan)
+	go _streamAcceptOppositeSide(conn, context, contextCancel, inStreamChan)
 
 	// Es wird ein Control Stream mit der gegenseite aufgebaut
-	outStream, err := nodeConn.conn.OpenStreamSync(nodeConn.context)
+	outStream, err := conn.OpenStreamSync(context)
 	if err != nil {
-		return fmt.Errorf("initControlStreams: Fehler beim Öffnen des Control Streams: %w", err)
+		return nil, fmt.Errorf("initControlStreams: Fehler beim Öffnen des Control Streams: %w", err)
 	}
 
 	// Es wird geprüpft ob der Eingehende Stream geöffnet wurde
 	inStreamResult := <-inStreamChan
 	if inStreamResult == nil {
-		return fmt.Errorf("initControlStreams: connection error")
+		return nil, fmt.Errorf("initControlStreams: connection error")
 	}
 	if inStreamResult.err != nil {
-		return fmt.Errorf("initControlStreams: " + inStreamResult.err.Error())
+		return nil, fmt.Errorf("initControlStreams: " + inStreamResult.err.Error())
 	}
 
 	// Die Streams werden abgespeichert
-	cstream := &NodeP2PConnectionControlStream{
-		outControlStream: outStream,
-		inControlStream:  inStreamResult.stream,
+	ptstream := &_NodeP2PConnectionPackageTrafficStream{
+		inPackageTrafficStream:  outStream,
+		outPackageTrafficStream: inStreamResult.stream,
 	}
 
-	// Das Stream Objekt wird im Verbindungsobjekt zwischengespeichert
-	nodeConn.controlStream = cstream
+	return ptstream, nil
+}
 
+func startGoroutineControl(routingStream *_NodeP2PConnectionControlStream, context context.Context, contextCancel context.CancelCauseFunc) error {
 	return nil
 }
 
-func initUnreliableDatagramsHandle(nodeConn *NodeP2PConnection) {
+func startGoroutineRouting(routingStream *_NodeP2PConnectionRoutingStream, context context.Context, contextCancel context.CancelCauseFunc) error {
+	return nil
+}
+
+func startGoroutinePackageTraffic(routingStream *_NodeP2PConnectionPackageTrafficStream, context context.Context, contextCancel context.CancelCauseFunc) error {
+	return nil
+}
+
+func startGoroutineUnreliableDatagrammHandle(conn quic.Connection, context context.Context, contextCancel context.CancelCauseFunc) error {
 	for {
-		msg, err := nodeConn.conn.ReceiveDatagram(nodeConn.context)
+		msg, err := conn.ReceiveDatagram(context)
 		if err != nil {
 			log.Println("Fehler beim Empfangen von Datagrammen:", err)
-			return
+			return nil
 		}
 
 		// Erste Byte als Typkennung auswerten
