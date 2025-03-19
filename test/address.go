@@ -5,45 +5,43 @@ import (
 	"fmt"
 	"log"
 
-	blst "github.com/supranational/blst/bindings/go"
+	"github.com/ms2sh/OpenKeyP2P/src/crypto"
 )
 
 func main() {
-	// Erzeuge einen 32-Byte Seed
 	seed := make([]byte, 32)
 	if _, err := rand.Read(seed); err != nil {
 		log.Fatalf("Fehler bei der Zufallsgenerierung: %v", err)
 	}
 
-	// Erzeuge ed25519-Schlüsselpaar mit dem gleichen Seed
-	ed25519Pub, _ := GenerateEd25519KeyPair(seed)
-	_, _ = GenerateSecp256k1KeyPair(seed)
-
-	// Erzeuge BLS-Schlüsselpaar mit dem gleichen Seed
-	secretKey := blst.KeyGen(seed, nil)
-	if secretKey == nil {
-		log.Fatal("Fehler: SecretKey konnte nicht generiert werden")
-	}
-
-	// Leite den zugehörigen BLS Public Key ab
-	blsPubKey := new(blst.P1Affine).From(secretKey)
-
-	// Führe die Kodierung aus – dabei wird der ed25519 Public Key als kryponPubKey verwendet
-	t := blsPubKey.Compress()
-	encodedBls, err := EncodeAddressToBase32StringWPrefix(3, ed25519Pub, t, []byte("abcd"))
+	priv, pub := crypto.GenerateRandomKeyPair(seed)
+	addr, err := crypto.OpenKeyP2PAddressFromPublicKey(pub)
 	if err != nil {
-		log.Fatalf("Fehler: %v", err)
+		panic(err)
 	}
 
-	fmt.Println(encodedBls)
+	dataHash := crypto.ComputeSha256BitHash([]byte("hallo welt"))
 
-	ft, epkey, spkey, port, err := DecodeAddressBase32StringWPrefix(encodedBls)
+	sig, err := crypto.AddressSign(priv, dataHash)
 	if err != nil {
-		fmt.Println(err)
-		return
+		panic(err)
 	}
 
-	tta, _ := EncodeAddressToBase32StringWPrefix(ft, epkey, spkey, port)
-	fmt.Println(tta)
-	fmt.Println(tta == encodedBls)
+	result, err := addr.VerifySignature(sig, dataHash)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(addr.ToString(), result)
+
+	decodedAddr, err := crypto.OpenKeyP2PAddressDecodeFromString(addr.ToString())
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(decodedAddr.ToString())
+
+	_, err = crypto.OpenKeyP2PAddressDecodeFromByteSlice(decodedAddr.ToByteSlice())
+	if err != nil {
+		panic(err)
+	}
 }

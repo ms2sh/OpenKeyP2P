@@ -2,12 +2,32 @@ package p2p
 
 import (
 	"context"
+	"sync"
 
 	"github.com/quic-go/quic-go"
 )
 
 type ConnectionId string
 type AddressType string
+type NodeP2PConfigEntry string
+type NodePublicSignatureKey []byte
+type NodePublicEncryptionKey []byte
+
+type NodeP2PCryptoMethode struct {
+	Name       string
+	Signature  string
+	Encryption string
+}
+
+type NodeP2PConnection struct {
+	conn                  quic.Connection
+	controlStream         *NodeP2PConnectionControlStream
+	packageTrafficStream  *_NodeP2PConnectionPackageTrafficStream
+	config                *NodeP2PConnectionConfig
+	context               context.Context
+	contextCancel         context.CancelCauseFunc
+	isIncommingConnection bool
+}
 
 type NodeP2PListenerConfig struct {
 	AllowInternetConnection       bool
@@ -19,40 +39,29 @@ type NodeP2PListenerConfig struct {
 type NodeP2PConnectionConfig struct {
 	AllowAutoRouting       bool
 	AllowTrafficForwarding bool
-	HostAddress            string
 }
 
 type NodeP2Listener struct {
-	config *NodeP2PListenerConfig
+	config   *NodeP2PListenerConfig
+	listener *quic.Listener
+	lock     *sync.Mutex
 }
 
-type NodeP2PConnection struct {
-	conn                  quic.Connection
-	controlStream         *_NodeP2PConnectionControlStream
-	routinStream          *_NodeP2PConnectionRoutingStream
-	packageTrafficStream  *_NodeP2PConnectionPackageTrafficStream
-	config                *NodeP2PConnectionConfig
-	context               context.Context
-	contextCancel         context.CancelCauseFunc
-	isIncommingConnection bool
+type QuicBidirectionalStream struct {
+	inStream                quic.Stream
+	outStream               quic.Stream
+	ctxCancle               context.CancelCauseFunc
+	lock                    *sync.Mutex
+	ctx                     context.Context
+	_sendHelloBytePacket    []byte
+	_recivedHelloBytePacket []byte
 }
 
-type _NodeP2PConnectionControlStream struct {
-	inControlStream  quic.Stream
-	outControlStream quic.Stream
-}
-
-type _NodeP2PConnectionRoutingStream struct {
-	inRoutingStream  quic.Stream
-	outRoutingStream quic.Stream
+type NodeP2PConnectionControlStream struct {
+	*QuicBidirectionalStream
+	destPeerHelloPacket HelloControlSteamPacket
 }
 
 type _NodeP2PConnectionPackageTrafficStream struct {
-	inPackageTrafficStream  quic.Stream
-	outPackageTrafficStream quic.Stream
-}
-
-type _ChanStreamErrorResult struct {
-	stream quic.Stream
-	err    error
+	*QuicBidirectionalStream
 }

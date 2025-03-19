@@ -1,12 +1,16 @@
 package p2p
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
+	"net"
 	"net/url"
+
+	"github.com/quic-go/quic-go"
 )
 
-func ConnectToNode(nodeUri string, tlsConfig *tls.Config, config *NodeP2PConnectionConfig) (*NodeP2PConnection, error) {
+func ConnectToNode(nodeUri string, tlsConfig *tls.Config, config *NodeP2PConnectionConfig) error {
 	controlUnlockByEnd := false
 	defer func() {
 		if !controlUnlockByEnd {
@@ -15,66 +19,86 @@ func ConnectToNode(nodeUri string, tlsConfig *tls.Config, config *NodeP2PConnect
 		controlLock.Unlock()
 	}()
 
-	if !wasSetuped {
-		return nil, fmt.Errorf("you must setup p2p node functions, call Setup()")
+	if !_VarsWasSetuped() {
+		return fmt.Errorf("you must setup p2p node functions, call Setup()")
 	}
 
 	parsedURL, err := url.Parse(nodeUri)
 	if err != nil {
-		return nil, fmt.Errorf("ConnectToNode: " + err.Error())
+		return fmt.Errorf("ConnectToNode: " + err.Error())
 	}
 
 	// Erlaubt nur "quic" als Protokoll
 	if parsedURL.Scheme != "quic" {
-		return nil, fmt.Errorf("only quic as protocol allowed")
+		return fmt.Errorf("only quic as protocol allowed")
 	}
 
 	// Der Host muss vorhanden sein
 	if parsedURL.Hostname() == "" {
-		return nil, fmt.Errorf("no host found")
+		return fmt.Errorf("no host found")
 	}
 
 	// Der Port muss vorhanden sein
 	if parsedURL.Port() == "" {
-		return nil, fmt.Errorf("no port found")
+		return fmt.Errorf("no port found")
 	}
 
 	// Der Pfad muss leer sein
 	if parsedURL.Path != "" {
-		return nil, fmt.Errorf("path must be empty")
+		return fmt.Errorf("path must be empty")
 	}
 
 	// Query-Parameter müssen leer sein
 	if parsedURL.RawQuery != "" {
-		return nil, fmt.Errorf("query parameters are not allowed")
+		return fmt.Errorf("query parameters are not allowed")
 	}
 
 	// Es wird eine Verbindung mit dem Node hergestellt
 	var finalNodeAddress string
 	switch IdentifyAddressType(parsedURL.Hostname()) {
 	case AddressTypeIPv4Address:
-		finalNodeAddress = fmt.Sprintf("%s:%s", parsedURL.Host, parsedURL.Port())
+		host, port, err := net.SplitHostPort(parsedURL.Host)
+		if err != nil {
+			return err
+		}
+		finalNodeAddress = fmt.Sprintf("%s:%s", host, port)
 	case AddressTypeIPv6Address:
 		finalNodeAddress = fmt.Sprintf("[%s]:%s", parsedURL.Host, parsedURL.Port())
 	case AddressTypeDomain:
 		ipadr, err := GetIpFromDomain(parsedURL.Hostname())
 		if err != nil {
-			return nil, fmt.Errorf("can't find ip for domain %s", parsedURL.Hostname())
+			return fmt.Errorf("can't find ip for domain %s", parsedURL.Hostname())
 		}
 
 		finalNodeAddress = fmt.Sprintf("%s:%s", ipadr, parsedURL.Port())
 	case AddressTypeUnkown:
-		return nil, fmt.Errorf("unkown protocol '%s' , only quic supported", parsedURL.Scheme)
+		return fmt.Errorf("unkown protocol '%s' , only quic supported", parsedURL.Scheme)
 	default:
-		return nil, fmt.Errorf("unkown protocol, only quic supported", parsedURL.Scheme)
+		return fmt.Errorf("unkown protocol, only quic supported: %s", parsedURL.Scheme)
 	}
 
-	// Die Eigentliche Verbindung wird aufgebaut
-	_, err = openNodeConnection(finalNodeAddress, false, tlsConfig, config)
+	// Jeder Client bekommt seinen eigenen Kontext
+	ctx, cancel := context.WithCancelCause(context.Background())
+
+	// Die Quic Verbindung wird aufgebaut
+	conn, err := quic.DialAddr(ctx, finalNodeAddress, tlsConfig, nil)
 	if err != nil {
-		return nil, fmt.Errorf("ConnectToNode: " + err.Error())
+		err = fmt.Errorf("ConnectToNode: %w", err)
+		cancel(err)
+		return err
+	}
+
+	// Die Verbindung wird Initialisiert
+	nodeConn, err := _InitNodeConn(ctx, cancel, false, config, conn)
+	if err != nil {
+		return err
+	}
+
+	// Die Verbindung wird vorbereitet
+	if err := _VarsAddNodeConnection(nodeConn); err != nil {
+		return err
 	}
 
 	// Falls alles passt, wird eine Verbindung hergestellt (hier Dummy-Rückgabe)
-	return &NodeP2PConnection{}, nil
+	return nil
 }
