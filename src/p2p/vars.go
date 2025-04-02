@@ -15,6 +15,12 @@ func _VarsAddNodeConnection(nodeConn *NodeP2PConnection) error {
 	return nil
 }
 
+func _VarsDeleteNodeConnection(nodeConn *NodeP2PConnection) {
+	controlLock.Lock()
+	defer controlLock.Unlock()
+	nodeConnections[nodeConn.GetConnectionId()] = nodeConn
+}
+
 func _VarsWasSetuped() bool {
 	controlLock.Lock()
 	reval := wasSetuped

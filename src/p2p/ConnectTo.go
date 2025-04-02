@@ -10,7 +10,7 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
-func ConnectToNode(nodeUri string, tlsConfig *tls.Config, config *NodeP2PConnectionConfig) error {
+func ConnectTo(nodeUri string, tlsConfig *tls.Config, config NodeP2PConnectionConfig) error {
 	controlUnlockByEnd := false
 	defer func() {
 		if !controlUnlockByEnd {
@@ -54,8 +54,10 @@ func ConnectToNode(nodeUri string, tlsConfig *tls.Config, config *NodeP2PConnect
 	}
 
 	// Es wird eine Verbindung mit dem Node hergestellt
+	useAsProxy := false
 	var finalNodeAddress string
-	switch IdentifyAddressType(parsedURL.Hostname()) {
+	iapt := IdentifyAddressType(parsedURL.Hostname())
+	switch iapt {
 	case AddressTypeIPv4Address:
 		host, port, err := net.SplitHostPort(parsedURL.Host)
 		if err != nil {
@@ -64,6 +66,7 @@ func ConnectToNode(nodeUri string, tlsConfig *tls.Config, config *NodeP2PConnect
 		finalNodeAddress = fmt.Sprintf("%s:%s", host, port)
 	case AddressTypeIPv6Address:
 		finalNodeAddress = fmt.Sprintf("[%s]:%s", parsedURL.Host, parsedURL.Port())
+	case AddressTypeOnionV3:
 	case AddressTypeDomain:
 		ipadr, err := GetIpFromDomain(parsedURL.Hostname())
 		if err != nil {
@@ -81,23 +84,57 @@ func ConnectToNode(nodeUri string, tlsConfig *tls.Config, config *NodeP2PConnect
 	ctx, cancel := context.WithCancelCause(context.Background())
 
 	// Die Quic Verbindung wird aufgebaut
-	conn, err := quic.DialAddr(ctx, finalNodeAddress, tlsConfig, nil)
-	if err != nil {
-		err = fmt.Errorf("ConnectToNode: %w", err)
-		cancel(err)
-		return err
-	}
+	var nodeConn *NodeP2PConnection
+	var conn quic.Connection
+	if !useAsProxy {
+		// Die Quic Verbindung wird aufgebaut
+		var err error
+		conn, err = quic.DialAddr(ctx, finalNodeAddress, tlsConfig, nil)
+		if err != nil {
+			err = fmt.Errorf("ConnectToNode: %w", err)
+			cancel(err)
+			return err
+		}
 
-	// Die Verbindung wird Initialisiert
-	nodeConn, err := _InitNodeConn(ctx, cancel, false, config, conn)
-	if err != nil {
-		return err
+		// Es wird das passende Interface für die Lokale IP-Adresse ermittelt
+		ip, _, err := net.SplitHostPort(conn.LocalAddr().String())
+		if err != nil {
+			err = fmt.Errorf("ConnectToNode: %w", err)
+			cancel(err)
+			return err
+		}
+		if ip == "::" || ip == "0.0.0.0" {
+			ip = getLocalIPFromConn(conn)
+		}
+		localhostNetworkInterface, err := getInterfaceByIP(ip)
+		if err != nil {
+			err = fmt.Errorf("ConnectToNode: %w", err)
+			cancel(err)
+			return err
+		}
+
+		// Die Verbindung wird Initialisiert
+		nodeConn, err = _InitNodeConn(localhostNetworkInterface, ctx, cancel, false, config, conn)
+		if err != nil {
+			cancel(err)
+			return err
+		}
+	} else {
+		cancel(nil)
+		return fmt.Errorf("not supported parameter")
 	}
 
 	// Die Verbindung wird vorbereitet
 	if err := _VarsAddNodeConnection(nodeConn); err != nil {
+		cancel(err)
 		return err
 	}
+
+	// Die Handler Routine wird gestartet
+	_AsyncHandleConnection(nodeConn, func() {
+		// Die Verbindung wurde getrennt, sie wird aus dem Verbindungsspeicher entfernt
+		_VarsDeleteNodeConnection(nodeConn)
+	})
 
 	// Falls alles passt, wird eine Verbindung hergestellt (hier Dummy-Rückgabe)
 	return nil

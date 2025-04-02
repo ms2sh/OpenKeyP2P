@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"log"
 	"net"
 	"sync"
 
@@ -13,15 +12,43 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
-func _HandleSession(session quic.Connection, config *NodeP2PListenerConfig) {
+func _HandleSession(session quic.Connection, listenerConfig *NodeP2PListenerConfig) {
+	// Context erzeugen
 	ctx, cancel := context.WithCancelCause(context.Background())
 
-	_, err := _InitNodeConn(ctx, cancel, true, &NodeP2PConnectionConfig{AllowAutoRouting: config.AllowAutoRouting, AllowTrafficForwarding: config.AllowTrafficForwarding}, session)
+	// Ermittelt das passende Netzwerkinterface anhand der IP Adresse
+	ip, _, err := net.SplitHostPort(session.LocalAddr().String())
+	if err != nil {
+		err = fmt.Errorf("_HandleSession: %w", err)
+		cancel(err)
+		return
+	}
+	localhostNetworkInterface, err := getInterfaceByIP(ip)
+	if err != nil {
+		err = fmt.Errorf("_HandleSession: %w", err)
+		cancel(err)
+		return
+	}
+
+	// Verbindung wird Initalisieren
+	conn, err := _InitNodeConn(localhostNetworkInterface, ctx, cancel, true, listenerConfig.GetConnectionConfig(), session)
 	if err != nil {
 		ert := fmt.Errorf("fehler beim Initalisieren einer Verbindung: %v", err)
-		fmt.Println(ert)
 		cancel(ert)
+		return
 	}
+
+	// Verbindung wird Global zwischengespeichert
+	if err := _VarsAddNodeConnection(conn); err != nil {
+		cancel(err)
+		return
+	}
+
+	// Der Handler wird gestartet
+	_SyncHandleConnection(conn)
+
+	// Die Verbindung wird Global gelöscht
+	_VarsDeleteNodeConnection(conn)
 }
 
 func _StartListenerGoroutine(listeneraddr openkeyp2p.LocalListenerAddress, listener *NodeP2Listener, config *NodeP2PListenerConfig) {
@@ -31,15 +58,24 @@ func _StartListenerGoroutine(listeneraddr openkeyp2p.LocalListenerAddress, liste
 			// Neue QUIC-Verbindung akzeptieren
 			session, err := listener.listener.Accept(context.Background())
 			if err != nil {
-				log.Printf("Fehler beim Akzeptieren einer Verbindung: %v", err)
+				logging.LogError(openkeyp2p.LOG_LEVEL_P2P, "Error by accepting connection %s", err, listeneraddr)
 				continue
 			}
+
+			// Die Lokale sowie die Remote IP werden abgerufen
+			remoteEndpointStr := getRemoteIPAndHostFromConn(session)
+
+			// LOG
+			logging.LogDebug(openkeyp2p.LOG_LEVEL_P2P, "Incoming connection accepted %s -> %s", remoteEndpointStr, listeneraddr)
+
+			// Falls NIST ECC genutzt wird, Verbindung weiterverarbeiten
 			go _HandleSession(session, config)
 		}
 	}()
 }
 
 func AddListener(localIp string, localPort uint32, tlsConfig *tls.Config, config *NodeP2PListenerConfig) error {
+	// Prüft ob die Gloablen Variablen Initalisiert wurden
 	if !_VarsWasSetuped() {
 		return fmt.Errorf("you must setup p2p node functions, call Setup()")
 	}
@@ -55,7 +91,7 @@ func AddListener(localIp string, localPort uint32, tlsConfig *tls.Config, config
 		return fmt.Errorf("invalid local ip address type")
 	}
 
-	//Log
+	// LOG
 	logging.LogDebug(openkeyp2p.LOG_LEVEL_P2P, "A new listener is started on %s", finalAddress)
 
 	// UDP-Listener erstellen

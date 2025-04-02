@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -12,43 +11,52 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
-func _StreamWriteBytePacket(conn quic.Connection, stream quic.Stream, helloPackage []byte) error {
-	// Log
-	logging.LogDebug(openkeyp2p.LOG_LEVEL_P2P_QUIC, "Send Stream hello package %s -> %s", conn.LocalAddr(), conn.RemoteAddr())
+func _StreamWriteBytePacket(conn quic.Connection, stream quic.Stream, data []byte) error {
+	// Der Header, bestehend aus der Datenlänge wird hinzugefügt
+	dataLength := len(data)
+	dataLengthBytes := openkeyp2p.Uint64ToBytesLE(uint64(dataLength))
+	finalDataBlock := append(dataLengthBytes, data...)
 
-	// Das Hallo Paket wird übertragen
-	if _, err := stream.Write(openkeyp2p.HELLO_STREAM_PACKAGE); err != nil {
+	// Der Schreibvorgang wird durchgeführt
+	if _, err := stream.Write(finalDataBlock); err != nil {
 		return err
 	}
+
+	// LOG
+	localEndpointStr := getLocalIPAndHostFromConn(conn)
+	remoteEndpointStr := getRemoteIPAndHostFromConn(conn)
+	logging.LogDebug(openkeyp2p.LOG_LEVEL_P2P_QUIC, "Data Packet writed, %d bytes %s -> %s", len(finalDataBlock), localEndpointStr, remoteEndpointStr)
 
 	return nil
 }
 
 func _StreamReadBytePacket(conn quic.Connection, stream quic.Stream) ([]byte, error) {
-	// Die Länge des Byte-Slices auf die Länge des zu erwartenden Pakets setzen
-	helloStromBytesSlice := make([]byte, len(openkeyp2p.HELLO_STREAM_PACKAGE))
+	// Die Länge des Datensatzes wird ausgelesen
+	dataLengthBytes := make([]byte, 8)
+	n, err := io.ReadFull(stream, dataLengthBytes)
+	if err != nil {
+		// Wenn beim Lesen ein Fehler auftritt, behandeln wir diesen Fehler
+		return nil, err
+	}
+	if n < 8 {
+		return nil, fmt.Errorf("invalid data")
+	}
+	dataLength := openkeyp2p.BytesToUint64LE(dataLengthBytes)
 
-	// Das Hello Stream Paket der gegenseite wird eingelesen
-	n, err := io.ReadFull(stream, helloStromBytesSlice)
+	// Der Restliche Datensatz wird ausgelesen
+	dataBytes := make([]byte, dataLength)
+	_, err = io.ReadFull(stream, dataBytes)
 	if err != nil {
 		// Wenn beim Lesen ein Fehler auftritt, behandeln wir diesen Fehler
 		return nil, err
 	}
 
-	// Es wird geprüft ob die Eingetroffnenen Datenmengen korrekt sind
-	if n != len(helloStromBytesSlice) {
-		return nil, fmt.Errorf("invalid hello stream package")
-	}
-
-	// Es wird geprüft ob es sich um ein Korrektes Hello Stream Package handelt
-	if !bytes.Equal(helloStromBytesSlice, openkeyp2p.HELLO_STREAM_PACKAGE) {
-		return nil, fmt.Errorf("invalid hello stream package")
-	}
-
 	// Log
-	logging.LogDebug(openkeyp2p.LOG_LEVEL_P2P_QUIC, "Recived Stream hello package %s -> %s", conn.LocalAddr(), conn.RemoteAddr())
+	localEndpointStr := getLocalIPAndHostFromConn(conn)
+	remoteEndpointStr := getRemoteIPAndHostFromConn(conn)
+	logging.LogDebug(openkeyp2p.LOG_LEVEL_P2P_QUIC, "Data Packet readed, %d bytes %s -> %s", dataLength+8, localEndpointStr, remoteEndpointStr)
 
-	return nil, nil
+	return dataBytes, nil
 }
 
 func _TryOpenQuicBidirectionalStream(isIncommingConnection bool, conn quic.Connection, helloPackage []byte, ctx context.Context) (*QuicBidirectionalStream, error) {
@@ -125,15 +133,18 @@ func _TryOpenQuicBidirectionalStream(isIncommingConnection bool, conn quic.Conne
 		lock:                    new(sync.Mutex),
 		ctx:                     ctx,
 		ctxCancle:               cancel,
+		quicConn:                conn,
 		_recivedHelloBytePacket: recivedPacket,
 		_sendHelloBytePacket:    helloPackage,
 	}
 
 	// Log
+	localEndpointStr := getLocalIPAndHostFromConn(conn)
+	remoteEndpointStr := getRemoteIPAndHostFromConn(conn)
 	if isIncommingConnection {
-		logging.LogDebug(openkeyp2p.LOG_LEVEL_P2P, "Bidirectional streams were generated %s -> %s", conn.RemoteAddr(), conn.LocalAddr())
+		logging.LogDebug(openkeyp2p.LOG_LEVEL_P2P, "Bidirectional streams were generated %s -> %s", localEndpointStr, remoteEndpointStr)
 	} else {
-		logging.LogDebug(openkeyp2p.LOG_LEVEL_P2P, "Bidirectional streams were generated %s -> %s", conn.LocalAddr(), conn.RemoteAddr())
+		logging.LogDebug(openkeyp2p.LOG_LEVEL_P2P, "Bidirectional streams were generated %s -> %s", localEndpointStr, remoteEndpointStr)
 	}
 
 	// Das Objekt wird zurückgegeben
@@ -158,9 +169,9 @@ func (q *QuicBidirectionalStream) Close() {
 }
 
 func (q *QuicBidirectionalStream) WriteBytes(byts []byte) error {
-	return nil
+	return _StreamWriteBytePacket(q.quicConn, q.outStream, byts)
 }
 
 func (q *QuicBidirectionalStream) ReadBytes() ([]byte, error) {
-	return nil, nil
+	return _StreamReadBytePacket(q.quicConn, q.inStream)
 }

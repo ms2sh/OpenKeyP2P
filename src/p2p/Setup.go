@@ -7,7 +7,7 @@ func Setup() error {
 	defer controlLock.Unlock()
 
 	if wasSetuped {
-		return fmt.Errorf("was alawasy setuped")
+		return fmt.Errorf("was always setup")
 	}
 
 	nodeConnections = make(map[ConnectionId]*NodeP2PConnection)

@@ -9,21 +9,24 @@ import (
 
 type ConnectionId string
 type AddressType string
-type NodeP2PConfigEntry string
 type NodePublicSignatureKey []byte
 type NodePublicEncryptionKey []byte
+type NodeP2PIpAddress []byte
+type NodeP2PAdressPort uint16
+type NodeP2PCryptoMethode string
+type NodeP2PConnectionConfig string
+type NodeP2PConnectionValidationId []byte
 
-type NodeP2PCryptoMethode struct {
-	Name       string
-	Signature  string
-	Encryption string
+type NodeP2PConfigEntry struct {
+	Name  string
+	Value string
 }
 
 type NodeP2PConnection struct {
 	conn                  quic.Connection
-	controlStream         *NodeP2PConnectionControlStream
-	packageTrafficStream  *_NodeP2PConnectionPackageTrafficStream
-	config                *NodeP2PConnectionConfig
+	controlStream         *NodeP2PControlStream
+	packageTrafficStream  *NodeP2PTrafficStream
+	config                NodeP2PConnectionConfig
 	context               context.Context
 	contextCancel         context.CancelCauseFunc
 	isIncommingConnection bool
@@ -34,11 +37,6 @@ type NodeP2PListenerConfig struct {
 	AllowPrivateNetworkConnection bool
 	AllowAutoRouting              bool
 	AllowTrafficForwarding        bool
-}
-
-type NodeP2PConnectionConfig struct {
-	AllowAutoRouting       bool
-	AllowTrafficForwarding bool
 }
 
 type NodeP2Listener struct {
@@ -53,15 +51,16 @@ type QuicBidirectionalStream struct {
 	ctxCancle               context.CancelCauseFunc
 	lock                    *sync.Mutex
 	ctx                     context.Context
+	quicConn                quic.Connection
 	_sendHelloBytePacket    []byte
 	_recivedHelloBytePacket []byte
 }
 
-type NodeP2PConnectionControlStream struct {
+type NodeP2PControlStream struct {
 	*QuicBidirectionalStream
 	destPeerHelloPacket HelloControlSteamPacket
 }
 
-type _NodeP2PConnectionPackageTrafficStream struct {
+type NodeP2PTrafficStream struct {
 	*QuicBidirectionalStream
 }

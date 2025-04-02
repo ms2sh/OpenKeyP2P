@@ -3,7 +3,7 @@ package openkeyp2p
 import "encoding/base32"
 
 const (
-	Version                     OpenKeyP2PVesion  = OpenKeyP2PVesion(10000000000000000000)
+	Version                     OpenKeyP2PVesion  = OpenKeyP2PVesion(100000001)
 	Prefix                      OpenKeyP2PPrefix  = OpenKeyP2PPrefix("okp2p")
 	Base32DefaultBase32Alphabet Base32Alphabet    = Base32Alphabet("qpzry9x8gf2tvdw0s3jn54khce6mua7l")
 	SHA_256                     HashAlgorithm     = 1
@@ -19,7 +19,6 @@ const (
 )
 
 var (
-	Base32Encoding       = base32.NewEncoding(string(Base32DefaultBase32Alphabet)).WithPadding(base32.NoPadding)
-	HELLO_STREAM_PACKAGE = []byte("hello stream")
-	SUPPORTED_VERSION    = []OpenKeyP2PVesion{Version}
+	Base32Encoding    = base32.NewEncoding(string(Base32DefaultBase32Alphabet)).WithPadding(base32.NoPadding)
+	SUPPORTED_VERSION = []OpenKeyP2PVesion{Version}
 )

@@ -5,4 +5,5 @@ const (
 	AddressTypeIPv6Address AddressType = "ipv6"
 	AddressTypeDomain      AddressType = "domain"
 	AddressTypeUnkown      AddressType = "unkown"
+	AddressTypeOnionV3     AddressType = "onionv3"
 )
