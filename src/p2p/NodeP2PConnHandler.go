@@ -14,8 +14,8 @@ func _SyncHandleConnection(conn *NodeP2PConnection) {
 	wg := new(sync.WaitGroup)
 	wg.Add(2)
 
-	//Die IP Adressen der Verbindung werden abgerufen
-	localEndpointStr := getLocalIPAndHostFromConn(conn.conn)
+	// Die IP Adressen der Verbindung werden abgerufen
+	localEndpointStr := getLocalIPFromConn(conn.conn)
 	remoteEndpointStr := getRemoteIPAndHostFromConn(conn.conn)
 
 	// Die Leseroutinen werden gestartet
@@ -30,6 +30,16 @@ func _SyncHandleConnection(conn *NodeP2PConnection) {
 
 	// Es wird darauf gewartet dass beide Routinen signalisieren das der Vorgang erfolgreich war
 	wg.Wait()
+	wg.Add(1)
+
+	// Die Keepalive Routine welche prüft wann die Letze erfolgreiche übertragung passiert ist wird gestartet
+	if err := _StartKeepaliveRoutinesForNodeConn(conn, wg); err != nil {
+		logging.LogError(openkeyp2p.LOG_LEVEL_P2P, "Error by starting 'keepalive' routine. Error(%s) %s -> %s", err, localEndpointStr, remoteEndpointStr)
+		return
+	}
+
+	// Es wird darauf gewartet das die Ping Routine gestartet wurde
+	wg.Wait()
 
 	// Log
 	logtxt := "A new connection has been established %s -> %s"
@@ -41,24 +51,19 @@ func _SyncHandleConnection(conn *NodeP2PConnection) {
 	} else {
 		logtxt = logtxt + "\n   -> AutoRouting: Disabeld"
 	}
-
-	if conn.isIncommingConnection {
-		logging.LogInfo(openkeyp2p.LOG_LEVEL_P2P, logtxt, remoteEndpointStr, localEndpointStr)
-	} else {
-		logging.LogInfo(openkeyp2p.LOG_LEVEL_P2P, logtxt, localEndpointStr, remoteEndpointStr)
-	}
+	logging.LogInfo(openkeyp2p.LOG_LEVEL_P2P, logtxt, localEndpointStr, remoteEndpointStr)
 
 	// Es wird darauf gewartet dass der Context geschlossen wird
-	<-conn.context.Done()
+	<-conn.ctx.Done()
 
 	// Ermitteln, warum der Kontext beendet wurde
-	switch conn.context.Err() {
+	switch conn.ctx.Err() {
 	case context.Canceled:
-		fmt.Println("Kontext wurde manuell abgebrochen")
+		logging.LogInfo(openkeyp2p.LOG_LEVEL_P2P, "The connection has been closed %s -> %s", localEndpointStr, remoteEndpointStr)
 	case context.DeadlineExceeded:
-		fmt.Println("Timeout erreicht")
+		logging.LogInfo(openkeyp2p.LOG_LEVEL_P2P, "The connection has been closed %s -> %s", localEndpointStr, remoteEndpointStr)
 	default:
-		fmt.Println("Unbekannter Abbruchgrund:", conn.context.Err())
+		fmt.Println("Unbekannter Abbruchgrund:", conn.ctx.Err())
 	}
 }
 

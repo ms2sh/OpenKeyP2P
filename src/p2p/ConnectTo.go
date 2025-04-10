@@ -114,7 +114,7 @@ func ConnectTo(nodeUri string, tlsConfig *tls.Config, config NodeP2PConnectionCo
 		}
 
 		// Die Verbindung wird Initialisiert
-		nodeConn, err = _InitNodeConn(localhostNetworkInterface, ctx, cancel, false, config, conn)
+		nodeConn, err = _InitQUICNodeConn(localhostNetworkInterface, ctx, cancel, false, config, conn)
 		if err != nil {
 			cancel(err)
 			return err

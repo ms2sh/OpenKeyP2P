@@ -31,7 +31,7 @@ func _HandleSession(session quic.Connection, listenerConfig *NodeP2PListenerConf
 	}
 
 	// Verbindung wird Initalisieren
-	conn, err := _InitNodeConn(localhostNetworkInterface, ctx, cancel, true, listenerConfig.GetConnectionConfig(), session)
+	conn, err := _InitQUICNodeConn(localhostNetworkInterface, ctx, cancel, true, listenerConfig.GetConnectionConfig(), session)
 	if err != nil {
 		ert := fmt.Errorf("fehler beim Initalisieren einer Verbindung: %v", err)
 		cancel(ert)

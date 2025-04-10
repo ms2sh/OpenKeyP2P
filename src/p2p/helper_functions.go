@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"regexp"
 
 	"github.com/quic-go/quic-go"
 )
@@ -25,38 +26,6 @@ func getLocalIPFromConn(conn quic.Connection) string {
 		return "127.0.0.1"
 	}
 	return addr.IP.String()
-}
-
-// getLocalIPAndPortFromConn gibt die lokale IP-Adresse, den Port sowie den Hostnamen zurück.
-func getLocalIPAndHostFromConn(conn quic.Connection) string {
-	addr := conn.LocalAddr().(*net.UDPAddr)
-	if addr.IP.IsUnspecified() {
-		ips, err := net.InterfaceAddrs()
-		if err == nil {
-			for _, ip := range ips {
-				if ipnet, ok := ip.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-					if ipnet.IP.To4() != nil {
-						// Holen des Hostnamens anhand der IP
-						hostname, _ := getHostnameFromIP(ipnet.IP.String())
-						// Rückgabe der IP und des Ports als ein String
-						if hostname == "" {
-							// Falls keine gültige IP gefunden wird, Rückfall auf 127.0.0.1 mit Port
-							hostname, _ := getHostnameFromIP("127.0.0.1")
-							return fmt.Sprintf("127.0.0.1:%d (%s)", addr.Port, hostname)
-						} else {
-							return fmt.Sprintf("%s:%d (%s)", ipnet.IP.String(), addr.Port, hostname)
-						}
-					}
-				}
-			}
-		}
-		// Falls keine gültige IP gefunden wird, Rückfall auf 127.0.0.1 mit Port
-		hostname, _ := getHostnameFromIP("127.0.0.1")
-		return fmt.Sprintf("127.0.0.1:%d (%s)", addr.Port, hostname)
-	}
-	// Falls eine spezifizierte IP vorhanden ist, IP und Port als String zurückgeben
-	hostname, _ := getHostnameFromIP(addr.IP.String())
-	return fmt.Sprintf("%s:%d (%s)", addr.IP.String(), addr.Port, hostname)
 }
 
 // getRemoteIPAndHostFromConn gibt die Remote-IP-Adresse, den Port sowie den Hostnamen zurück.
@@ -117,4 +86,12 @@ func getInterfaceByIP(ipAddress string) (*net.Interface, error) {
 	// Debugging: IP-Adresse, die nicht gefunden wurde
 	fmt.Println("Local IP:", ipAddress)
 	return nil, errors.New("kein passendes Interface gefunden")
+}
+
+// Überprüft, ob der Name nur aus erlaubten Zeichen besteht: a-z, A-Z, 0-9, _ und -
+func isValidName(name string) bool {
+	// Definiere ein Regex, das nur alphanumerische Zeichen, "_" und "-" erlaubt
+	validNameRegex := `^[a-zA-Z0-9_-]+$`
+	matched, _ := regexp.MatchString(validNameRegex, name)
+	return matched
 }

@@ -9,7 +9,7 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
-func _TryOpenP2PConnectionControlStream(localhostNetworkInterface *net.Interface, isIncommingConnection bool, conn quic.Connection, config NodeP2PConnectionConfig, ctx context.Context) (*NodeP2PControlStream, error) {
+func _TryOpenP2PConnectionControlStream(localhostNetworkInterface *net.Interface, isIncommingConnection bool, conn quic.Connection, config NodeP2PConnectionConfig, localSocketEp NodeP2PSocketAddress, remoteSocketEp NodeP2PSocketAddress, connCtx context.Context, connCtxCancel context.CancelCauseFunc) (*NodeP2PControlStream, error) {
 	// IP und Port extrahieren
 	host, portStr, err := net.SplitHostPort(conn.RemoteAddr().String())
 	if err != nil {
@@ -40,7 +40,7 @@ func _TryOpenP2PConnectionControlStream(localhostNetworkInterface *net.Interface
 	}
 
 	// Das Hello Packet wird erzeugt und in Bytes umgewandelt
-	helloPacketWithoutSignature := HelloControlSteamPacketWSig{
+	helloPacketWithoutSignature := L1HelloControlSteamPacketWSig{
 		LocalVersion:       openkeyp2p.Version,
 		SupportedVersions:  openkeyp2p.SUPPORTED_VERSION,
 		NodeConfigOptions:  config,
@@ -61,9 +61,9 @@ func _TryOpenP2PConnectionControlStream(localhostNetworkInterface *net.Interface
 	}
 
 	// Die Signatur wird hinzugefügt
-	helloPacket := &HelloControlSteamPacket{
-		HelloControlSteamPacketWSig: helloPacketWithoutSignature,
-		Signature:                   signature,
+	helloPacket := &L1HelloControlSteamPacket{
+		L1HelloControlSteamPacketWSig: helloPacketWithoutSignature,
+		Signature:                     signature,
 	}
 
 	// Das Hello Packet wird in Bytes umgewandelt
@@ -73,7 +73,7 @@ func _TryOpenP2PConnectionControlStream(localhostNetworkInterface *net.Interface
 	}
 
 	// Die Streamverbindung wird aufgebaut und das Hello Packet wird übertragen
-	streamConn, err := _TryOpenQuicBidirectionalStream(isIncommingConnection, conn, bytedHelloPacket, ctx)
+	streamConn, err := _TryOpenQuicBidirectionalStream(isIncommingConnection, conn, bytedHelloPacket, localSocketEp, remoteSocketEp, connCtx, connCtxCancel)
 	if err != nil {
 		return nil, err
 	}

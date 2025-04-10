@@ -6,7 +6,7 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
-func _TryOpenP2PConnectionTrafficStream(isIncommingConnection bool, conn quic.Connection, ctx context.Context) (*NodeP2PTrafficStream, error) {
+func _TryOpenP2PConnectionTrafficStream(isIncommingConnection bool, conn quic.Connection, localSocketEp NodeP2PSocketAddress, remoteSocketEp NodeP2PSocketAddress, connCtx context.Context, connCtxCancel context.CancelCauseFunc) (*NodeP2PTrafficStream, error) {
 	// Es wird ein Zufälliger Wert erzeugt
 	randomValue, err := _BuildRandomVIdValue()
 	if err != nil {
@@ -20,7 +20,7 @@ func _TryOpenP2PConnectionTrafficStream(isIncommingConnection bool, conn quic.Co
 	}
 
 	// Die Signatur wird hinzugefügt
-	helloPacket := &HelloTrafficStreamPacket{
+	helloPacket := &L1HelloTrafficStreamPacket{
 		ValId:     randomValue,
 		Signature: signature,
 	}
@@ -32,7 +32,7 @@ func _TryOpenP2PConnectionTrafficStream(isIncommingConnection bool, conn quic.Co
 	}
 
 	// Die Streamverbindung wird aufgebaut und das Hello Packet wird übertragen
-	streamConn, err := _TryOpenQuicBidirectionalStream(isIncommingConnection, conn, bytedHelloPacket, ctx)
+	streamConn, err := _TryOpenQuicBidirectionalStream(isIncommingConnection, conn, bytedHelloPacket, localSocketEp, remoteSocketEp, connCtx, connCtxCancel)
 	if err != nil {
 		return nil, err
 	}

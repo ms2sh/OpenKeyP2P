@@ -3,7 +3,6 @@ package p2p
 import (
 	"fmt"
 	"net/url"
-	"regexp"
 	"slices"
 	"strings"
 )
@@ -36,14 +35,6 @@ func _DeterminesCommonConfig(remoteControlStream NodeP2PConnectionConfig, localN
 // Erstellt eine neue Konfiguration für eine Verbindung
 func NewNodeP2PConnectionConfig() NodeP2PConnectionConfig {
 	return NodeP2PConnectionConfig("<>")
-}
-
-// Überprüft, ob der Name nur aus erlaubten Zeichen besteht: a-z, A-Z, 0-9, _ und -
-func isValidName(name string) bool {
-	// Definiere ein Regex, das nur alphanumerische Zeichen, "_" und "-" erlaubt
-	validNameRegex := `^[a-zA-Z0-9_-]+$`
-	matched, _ := regexp.MatchString(validNameRegex, name)
-	return matched
 }
 
 // Fügt ein neues name=value Paar innerhalb der <> hinzu (ähnlich wie Cookies)
